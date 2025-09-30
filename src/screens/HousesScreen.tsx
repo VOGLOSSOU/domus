@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,12 @@ import {
   Alert,
   Modal,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HouseDAO } from '../dao/HouseDAO';
 import { TenantDAO } from '../dao/TenantDAO';
 import { House, Tenant } from '../types';
+import AddHouseModal from '../components/AddHouseModal';
 
 interface HouseWithTenants extends House {
   tenants: Tenant[];
@@ -31,17 +30,19 @@ export default function HousesScreen() {
   const [selectedHouse, setSelectedHouse] = useState<HouseWithTenants | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Form state
-  const [newHouseName, setNewHouseName] = useState('');
-  const [newHouseAddress, setNewHouseAddress] = useState('');
+  // Form state - using object to prevent unnecessary re-renders
+  const [formData, setFormData] = useState({
+    name: '',
+    address: ''
+  });
 
-  // Debounced input handlers to prevent excessive re-renders
+  // Memoized input handlers to prevent excessive re-renders
   const handleNameChange = useCallback((text: string) => {
-    setNewHouseName(text);
+    setFormData(prev => ({ ...prev, name: text }));
   }, []);
 
   const handleAddressChange = useCallback((text: string) => {
-    setNewHouseAddress(text);
+    setFormData(prev => ({ ...prev, address: text }));
   }, []);
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export default function HousesScreen() {
     filterHouses();
   }, [houses, searchQuery]);
 
-  const loadHouses = async () => {
+  const loadHouses = useCallback(async () => {
     try {
       setLoading(true);
       const housesData = await HouseDAO.getAll();
@@ -84,9 +85,9 @@ export default function HousesScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const filterHouses = () => {
+  const filterHouses = useCallback(() => {
     if (!searchQuery.trim()) {
       setFilteredHouses(houses);
     } else {
@@ -96,22 +97,21 @@ export default function HousesScreen() {
       );
       setFilteredHouses(filtered);
     }
-  };
+  }, [houses, searchQuery]);
 
-  const handleAddHouse = async () => {
-    if (!newHouseName.trim() || !newHouseAddress.trim()) {
+  const handleAddHouse = useCallback(async () => {
+    if (!formData.name.trim() || !formData.address.trim()) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
     }
 
     try {
       await HouseDAO.create({
-        name: newHouseName.trim(),
-        address: newHouseAddress.trim(),
+        name: formData.name.trim(),
+        address: formData.address.trim(),
       });
 
-      setNewHouseName('');
-      setNewHouseAddress('');
+      setFormData({ name: '', address: '' });
       setShowAddModal(false);
       loadHouses();
       Alert.alert('Succès', 'Maison ajoutée avec succès');
@@ -119,9 +119,9 @@ export default function HousesScreen() {
       console.error('Error adding house:', error);
       Alert.alert('Erreur', 'Impossible d\'ajouter la maison');
     }
-  };
+  }, [formData, loadHouses]);
 
-  const handleDeleteHouse = (house: HouseWithTenants) => {
+  const handleDeleteHouse = useCallback((house: HouseWithTenants) => {
     Alert.alert(
       'Confirmer la suppression',
       `Êtes-vous sûr de vouloir supprimer "${house.name}" ? Cette action est irréversible.`,
@@ -143,9 +143,9 @@ export default function HousesScreen() {
         }
       ]
     );
-  };
+  }, [loadHouses]);
 
-  const HouseCard = ({ house }: { house: HouseWithTenants }) => (
+  const HouseCard = memo(({ house }: { house: HouseWithTenants }) => (
     <TouchableOpacity
       style={styles.houseCard}
       onPress={() => setSelectedHouse(house)}
@@ -200,9 +200,9 @@ export default function HousesScreen() {
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
-  );
+  ));
 
-  const HouseDetailsModal = () => {
+  const HouseDetailsModal = memo(() => {
     if (!selectedHouse) return null;
 
     return (
@@ -275,75 +275,18 @@ export default function HousesScreen() {
         </View>
       </Modal>
     );
-  };
+  });
 
-  const AddHouseModal = () => (
-    <Modal
-      visible={showAddModal}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowAddModal(false)}
-    >
-      <View style={styles.simpleModalContainer}>
-        <View style={styles.simpleModalHeader}>
-          <Text style={styles.simpleModalTitle}>Nouvelle maison</Text>
-          <TouchableOpacity
-            onPress={() => setShowAddModal(false)}
-            style={styles.simpleCloseButton}
-          >
-            <Ionicons name="close" size={24} color="#6b7280" />
-          </TouchableOpacity>
-        </View>
+  // Memoized cancel handler
+  const handleCancel = useCallback(() => {
+    setFormData({ name: '', address: '' });
+    setShowAddModal(false);
+  }, []);
 
-        <ScrollView style={styles.simpleModalContent} keyboardShouldPersistTaps="handled">
-          <View style={styles.simpleFormGroup}>
-            <Text style={styles.simpleFormLabel}>Nom de la maison *</Text>
-            <TextInput
-              style={styles.simpleFormInput}
-              value={newHouseName}
-              onChangeText={handleNameChange}
-              placeholder="Ex: Résidence des Fleurs"
-              autoCapitalize="words"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View style={styles.simpleFormGroup}>
-            <Text style={styles.simpleFormLabel}>Adresse complète *</Text>
-            <TextInput
-              style={[styles.simpleFormInput, styles.simpleFormTextarea]}
-              value={newHouseAddress}
-              onChangeText={handleAddressChange}
-              placeholder="Quartier, rue, ville..."
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View style={styles.simpleFormActions}>
-            <TouchableOpacity
-              style={[styles.simpleFormButton, styles.simpleCancelButton]}
-              onPress={() => {
-                setNewHouseName('');
-                setNewHouseAddress('');
-                setShowAddModal(false);
-              }}
-            >
-              <Text style={styles.simpleCancelButtonText}>Annuler</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.simpleFormButton, styles.simpleSubmitButton]}
-              onPress={handleAddHouse}
-            >
-              <Text style={styles.simpleSubmitButtonText}>Créer la maison</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </View>
-    </Modal>
-  );
+  // Memoized close handler
+  const handleCloseModal = useCallback(() => {
+    setShowAddModal(false);
+  }, []);
 
   if (loading) {
     return (
@@ -409,7 +352,15 @@ export default function HousesScreen() {
       />
 
       <HouseDetailsModal />
-      <AddHouseModal />
+      <AddHouseModal
+        visible={showAddModal}
+        formData={formData}
+        onNameChange={handleNameChange}
+        onAddressChange={handleAddressChange}
+        onSubmit={handleAddHouse}
+        onCancel={handleCancel}
+        onClose={handleCloseModal}
+      />
     </View>
   );
 }

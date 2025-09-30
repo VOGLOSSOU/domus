@@ -9,21 +9,20 @@ import {
   Alert,
   Modal,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TenantDAO } from '../dao/TenantDAO';
 import { HouseDAO } from '../dao/HouseDAO';
 import { RoomDAO } from '../dao/RoomDAO';
-import { TenantWithDetails, House, Room } from '../types';
+import { TenantWithDetails, House } from '../types';
+import AddTenantModal from '../components/AddTenantModal';
 
 export default function TenantsScreen() {
   const [tenants, setTenants] = useState<TenantWithDetails[]>([]);
   const [filteredTenants, setFilteredTenants] = useState<TenantWithDetails[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedTenant, setSelectedTenant] = useState<TenantWithDetails | null>(null);
+
   const [loading, setLoading] = useState(true);
 
   // Form state
@@ -50,7 +49,7 @@ export default function TenantsScreen() {
     filterTenants();
   }, [tenants, searchQuery]);
 
-  const loadTenants = async () => {
+  const loadTenants = useCallback(async () => {
     try {
       setLoading(true);
       const tenantsData = await TenantDAO.getAllWithPaymentStatus();
@@ -61,19 +60,18 @@ export default function TenantsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadHouses = async () => {
+  const loadHouses = useCallback(async () => {
     try {
       const housesData = await HouseDAO.getAll();
       setHouses(housesData);
     } catch (error) {
       console.error('Error loading houses:', error);
     }
-  };
+  }, []);
 
-
-  const filterTenants = () => {
+  const filterTenants = useCallback(() => {
     if (!searchQuery.trim()) {
       setFilteredTenants(tenants);
     } else {
@@ -84,7 +82,7 @@ export default function TenantsScreen() {
       );
       setFilteredTenants(filtered);
     }
-  };
+  }, [tenants, searchQuery]);
 
   const handleAddTenant = useCallback(async () => {
     if (!newTenantData.firstName.trim() || !newTenantData.lastName.trim() ||
@@ -166,10 +164,10 @@ export default function TenantsScreen() {
     setNewTenantData(prev => ({ ...prev, rentAmount: text }));
   }, []);
 
-  const TenantCard = ({ tenant }: { tenant: TenantWithDetails }) => (
+  const TenantCard = memo(({ tenant }: { tenant: TenantWithDetails }) => (
     <TouchableOpacity
       style={styles.tenantCard}
-      onPress={() => setSelectedTenant(tenant)}
+      onPress={() => {/* TODO: Implement tenant details */}}
     >
       <View style={styles.tenantHeader}>
         <View style={styles.tenantAvatar}>
@@ -201,9 +199,9 @@ export default function TenantsScreen() {
         </View>
       </View>
     </TouchableOpacity>
-  );
+  ));
 
-  const HousePickerModal = () => (
+  const HousePickerModal = memo(() => (
     <Modal
       visible={showHousePicker}
       animationType="fade"
@@ -260,179 +258,31 @@ export default function TenantsScreen() {
         </View>
       </View>
     </Modal>
-  );
+  ));
 
-  const AddTenantModal = memo(() => {
-    return (
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowAddModal(false)}
-        statusBarTranslucent={true}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Nouveau locataire</Text>
-            <TouchableOpacity
-              onPress={() => setShowAddModal(false)}
-              style={styles.closeButton}
-            >
-              <Ionicons name="close" size={24} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
+  // Memoized handlers for modal
+  const handleCancelTenant = useCallback(() => {
+    setNewTenantData({
+      firstName: '',
+      lastName: '',
+      phone: '',
+      email: '',
+      houseId: 0,
+      roomName: '',
+      roomType: '',
+      rentAmount: '',
+      paymentFrequency: 'mensuelle',
+    });
+    setShowAddModal(false);
+  }, []);
 
-          <ScrollView
-            style={styles.modalContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-              <View style={styles.simpleFormGroup}>
-                <Text style={styles.simpleFormLabel}>Prénom *</Text>
-                <TextInput
-                  style={styles.simpleFormInput}
-                  value={newTenantData.firstName}
-                  onChangeText={handleFirstNameChange}
-                  placeholder="Prénom du locataire"
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  keyboardType="default"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-              </View>
+  const handleCloseTenantModal = useCallback(() => {
+    setShowAddModal(false);
+  }, []);
 
-              <View style={styles.simpleFormGroup}>
-                <Text style={styles.simpleFormLabel}>Nom *</Text>
-                <TextInput
-                  style={styles.simpleFormInput}
-                  value={newTenantData.lastName}
-                  onChangeText={handleLastNameChange}
-                  placeholder="Nom du locataire"
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  keyboardType="default"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-              </View>
-
-              <View style={styles.simpleFormGroup}>
-                <Text style={styles.simpleFormLabel}>Téléphone *</Text>
-                <TextInput
-                  style={styles.simpleFormInput}
-                  value={newTenantData.phone}
-                  onChangeText={handlePhoneChange}
-                  placeholder="Numéro de téléphone"
-                  keyboardType="phone-pad"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-              </View>
-
-              <View style={styles.simpleFormGroup}>
-                <Text style={styles.simpleFormLabel}>Email (optionnel)</Text>
-                <TextInput
-                  style={styles.simpleFormInput}
-                  value={newTenantData.email}
-                  onChangeText={handleEmailChange}
-                  placeholder="email@exemple.com"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-              </View>
-
-              <View style={styles.simpleFormGroup}>
-                <Text style={styles.simpleFormLabel}>Maison *</Text>
-                <TouchableOpacity
-                  style={styles.simpleFormSelect}
-                  onPress={() => setShowHousePicker(true)}
-                >
-                  <Text style={newTenantData.houseId ? styles.simpleFormSelectText : styles.simpleFormPlaceholder}>
-                    {newTenantData.houseId ? houses.find(h => h.id === newTenantData.houseId)?.name : 'Choisir une maison'}
-                  </Text>
-                  <Ionicons name="chevron-down" size={20} color="#6b7280" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.simpleFormGroup}>
-                <Text style={styles.simpleFormLabel}>Nom de la chambre *</Text>
-                <TextInput
-                  style={styles.simpleFormInput}
-                  value={newTenantData.roomName}
-                  onChangeText={handleRoomNameChange}
-                  placeholder="Ex: Chambre 101, Studio A"
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  keyboardType="default"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-              </View>
-
-              <View style={styles.simpleFormGroup}>
-                <Text style={styles.simpleFormLabel}>Type de chambre *</Text>
-                <TextInput
-                  style={styles.simpleFormInput}
-                  value={newTenantData.roomType}
-                  onChangeText={handleRoomTypeChange}
-                  placeholder="Ex: Studio, Chambre simple, Suite"
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  keyboardType="default"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                />
-              </View>
-
-              <View style={styles.simpleFormGroup}>
-                <Text style={styles.simpleFormLabel}>Loyer mensuel *</Text>
-                <TextInput
-                  style={styles.simpleFormInput}
-                  value={newTenantData.rentAmount}
-                  onChangeText={handleRentAmountChange}
-                  placeholder="Montant en FCFA"
-                  keyboardType="numeric"
-                  returnKeyType="done"
-                  blurOnSubmit={false}
-                />
-              </View>
-
-              <View style={styles.simpleFormActions}>
-                <TouchableOpacity
-                  style={[styles.simpleFormButton, styles.simpleCancelButton]}
-                  onPress={() => {
-                    setNewTenantData({
-                      firstName: '',
-                      lastName: '',
-                      phone: '',
-                      email: '',
-                      houseId: 0,
-                      roomName: '',
-                      roomType: '',
-                      rentAmount: '',
-                      paymentFrequency: 'mensuelle',
-                    });
-                    setShowAddModal(false);
-                  }}
-                >
-                  <Text style={styles.simpleCancelButtonText}>Annuler</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.simpleFormButton, styles.simpleSubmitButton]}
-                  onPress={handleAddTenant}
-                >
-                  <Text style={styles.simpleSubmitButtonText}>Ajouter le locataire</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-      </Modal>
-    );
-  });
+  const handleShowHousePicker = useCallback(() => {
+    setShowHousePicker(true);
+  }, []);
 
   // Loading check
   if (loading) {
@@ -498,7 +348,22 @@ export default function TenantsScreen() {
         }
       />
 
-      <AddTenantModal />
+      <AddTenantModal
+        visible={showAddModal}
+        formData={newTenantData}
+        houses={houses}
+        onFirstNameChange={handleFirstNameChange}
+        onLastNameChange={handleLastNameChange}
+        onPhoneChange={handlePhoneChange}
+        onEmailChange={handleEmailChange}
+        onRoomNameChange={handleRoomNameChange}
+        onRoomTypeChange={handleRoomTypeChange}
+        onRentAmountChange={handleRentAmountChange}
+        onSubmit={handleAddTenant}
+        onCancel={handleCancelTenant}
+        onClose={handleCloseTenantModal}
+        onShowHousePicker={handleShowHousePicker}
+      />
       <HousePickerModal />
     </View>
   );
