@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { HouseDAO } from '../dao/HouseDAO';
 import { TenantDAO } from '../dao/TenantDAO';
+import { PaymentDAO } from '../dao/PaymentDAO';
 import { House, Tenant } from '../types';
 import AddHouseModal from '../components/AddHouseModal';
 
@@ -63,11 +64,27 @@ export default function HousesScreen() {
         housesData.map(async (house) => {
           const tenants = await TenantDAO.getByHouseId(house.id);
           const totalRent = tenants.reduce((sum, tenant) => sum + tenant.rent_amount, 0);
-          const overdueCount = tenants.filter(tenant => {
-            // Simple logic: if no payments in current month, consider overdue
-            // In a real app, this would be more sophisticated
-            return false; // Placeholder
-          }).length;
+
+          // Calculate overdue payments for current month
+          const currentDate = new Date();
+          const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+          const overdueCount = await Promise.all(
+            tenants.map(async (tenant) => {
+              // Check if tenant was added before or during current month
+              const entryDate = new Date(tenant.entry_date);
+              const entryMonth = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}`;
+
+              // If tenant was added this month or later, consider them up to date
+              if (entryMonth >= currentMonth) {
+                return false;
+              }
+
+              // Check if current month payment exists
+              const hasPayment = await PaymentDAO.isMonthPaid(tenant.id, currentMonth);
+              return !hasPayment;
+            })
+          ).then(results => results.filter(Boolean).length);
 
           return {
             ...house,
@@ -186,13 +203,6 @@ export default function HousesScreen() {
           <Text style={styles.actionText}>Détails</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.actionButton, styles.editButton]}
-          onPress={() => {/* TODO: Edit functionality */}}
-        >
-          <Ionicons name="pencil" size={16} color="#2563eb" />
-          <Text style={styles.editText}>Modifier</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
           style={[styles.actionButton, styles.deleteButton]}
           onPress={() => handleDeleteHouse(house)}
         >
@@ -209,18 +219,27 @@ export default function HousesScreen() {
       <Modal
         visible={!!selectedHouse}
         animationType="slide"
+        presentationStyle="pageSheet"
         onRequestClose={() => setSelectedHouse(null)}
+        statusBarTranslucent={true}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+        <View style={styles.pageSheetContainer}>
+          <View style={styles.pageSheetHeader}>
             <TouchableOpacity onPress={() => setSelectedHouse(null)}>
-              <Ionicons name="arrow-back" size={24} color="#2563eb" />
+              <Ionicons name="close" size={24} color="#6b7280" />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>{selectedHouse.name}</Text>
-            <View style={{ width: 24 }} />
+            <Text style={styles.pageSheetTitle}>{selectedHouse.name}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setSelectedHouse(null);
+                handleDeleteHouse(selectedHouse);
+              }}
+            >
+              <Ionicons name="trash" size={20} color="#ef4444" />
+            </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView style={styles.pageSheetContent}>
             <View style={styles.houseDetailCard}>
               <Ionicons name="location" size={20} color="#6b7280" />
               <Text style={styles.houseDetailAddress}>{selectedHouse.address}</Text>
@@ -265,7 +284,7 @@ export default function HousesScreen() {
                   </View>
                   <View style={styles.tenantStatus}>
                     <View style={styles.statusBadge}>
-                      <Text style={styles.statusText}>À jour</Text>
+                      <Text style={styles.statusText}>À vérifier</Text>
                     </View>
                   </View>
                 </View>
@@ -276,6 +295,7 @@ export default function HousesScreen() {
       </Modal>
     );
   });
+
 
   // Memoized cancel handler
   const handleCancel = useCallback(() => {
@@ -352,15 +372,17 @@ export default function HousesScreen() {
       />
 
       <HouseDetailsModal />
-      <AddHouseModal
-        visible={showAddModal}
-        formData={formData}
-        onNameChange={handleNameChange}
-        onAddressChange={handleAddressChange}
-        onSubmit={handleAddHouse}
-        onCancel={handleCancel}
-        onClose={handleCloseModal}
-      />
+      {showAddModal && (
+        <AddHouseModal
+          visible={showAddModal}
+          formData={formData}
+          onNameChange={handleNameChange}
+          onAddressChange={handleAddressChange}
+          onSubmit={handleAddHouse}
+          onCancel={handleCancel}
+          onClose={handleCloseModal}
+        />
+      )}
     </View>
   );
 }
@@ -518,12 +540,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontWeight: '600',
   },
-  editButton: {
-    backgroundColor: '#eff6ff',
-  },
-  editText: {
-    color: '#2563eb',
-  },
   deleteButton: {
     backgroundColor: '#fef2f2',
   },
@@ -564,10 +580,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pageSheetContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  pageSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  pageSheetTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  pageSheetContent: {
+    flex: 1,
+    padding: 20,
+  },
   modalContainer: {
     backgroundColor: '#f8fafc',
     borderRadius: 20,
-    width: '90%',
+    width: '100%',
     maxHeight: '80%',
   },
   modalHeader: {
@@ -688,6 +734,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#065f46',
     fontWeight: '600',
+  },
+  statusUpToDate: {
+    backgroundColor: '#d1fae5',
+  },
+  statusOverdue: {
+    backgroundColor: '#fef2f2',
+  },
+  statusTextUpToDate: {
+    color: '#065f46',
+  },
+  statusTextOverdue: {
+    color: '#dc2626',
   },
   formGroup: {
     marginBottom: 20,
