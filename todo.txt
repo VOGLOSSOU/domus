@@ -1,0 +1,19 @@
+
+- Lorsqu'on ajoute un locataire, on peut aussi le modifier. Je n'arrive pas a le faire dans la version actuelle 
+- rien ne s'affiche dans retard. ( Tu peux mettre la par maison. Le dernier mois payé par locataires... Pas la date du dernier paiement. C'est une idee
+
+- Travailler la position du bouton qui permet d'ajouter un locataire pour que ça soit plus accessible et visible.
+
+- Ajouter un bouton qui va permettre de synchroniser les données directement dans l'App 
+
+- Faire en sorte que l'on puisse ajouter les paiements de n'importe quel mois ( sans limite )
+
+Possibilité de modifier les paiements
+
+
+Lors du paiement,ajouter une case remarque ( champ de texte )
+
+
+Remplacer En retard par dernier paiement effectué
+
+- changer le nom en TSB
