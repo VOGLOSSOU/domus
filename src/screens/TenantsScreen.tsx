@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -86,7 +86,7 @@ export default function TenantsScreen() {
     }
   };
 
-  const handleAddTenant = async () => {
+  const handleAddTenant = useCallback(async () => {
     if (!newTenantData.firstName.trim() || !newTenantData.lastName.trim() ||
         !newTenantData.phone.trim() || !newTenantData.houseId ||
         !newTenantData.roomName.trim() || !newTenantData.roomType.trim() ||
@@ -135,7 +135,36 @@ export default function TenantsScreen() {
       console.error('Error adding tenant:', error);
       Alert.alert('Erreur', 'Impossible d\'ajouter le locataire');
     }
-  };
+  }, [newTenantData, loadTenants]);
+
+  // Input change handlers - memoized to prevent modal re-renders
+  const handleFirstNameChange = useCallback((text: string) => {
+    setNewTenantData(prev => ({ ...prev, firstName: text }));
+  }, []);
+
+  const handleLastNameChange = useCallback((text: string) => {
+    setNewTenantData(prev => ({ ...prev, lastName: text }));
+  }, []);
+
+  const handlePhoneChange = useCallback((text: string) => {
+    setNewTenantData(prev => ({ ...prev, phone: text }));
+  }, []);
+
+  const handleEmailChange = useCallback((text: string) => {
+    setNewTenantData(prev => ({ ...prev, email: text }));
+  }, []);
+
+  const handleRoomNameChange = useCallback((text: string) => {
+    setNewTenantData(prev => ({ ...prev, roomName: text }));
+  }, []);
+
+  const handleRoomTypeChange = useCallback((text: string) => {
+    setNewTenantData(prev => ({ ...prev, roomType: text }));
+  }, []);
+
+  const handleRentAmountChange = useCallback((text: string) => {
+    setNewTenantData(prev => ({ ...prev, rentAmount: text }));
+  }, []);
 
   const TenantCard = ({ tenant }: { tenant: TenantWithDetails }) => (
     <TouchableOpacity
@@ -233,43 +262,43 @@ export default function TenantsScreen() {
     </Modal>
   );
 
-  const AddTenantModal = () => {
+  const AddTenantModal = memo(() => {
     return (
       <Modal
         visible={showAddModal}
-        animationType="fade"
-        transparent={true}
+        animationType="slide"
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowAddModal(false)}
         statusBarTranslucent={true}
       >
-        <View style={styles.overlay}>
-          <View style={styles.simpleModalContainer}>
-            <View style={styles.simpleModalHeader}>
-              <Text style={styles.simpleModalTitle}>Nouveau locataire</Text>
-              <TouchableOpacity
-                onPress={() => setShowAddModal(false)}
-                style={styles.simpleCloseButton}
-              >
-                <Ionicons name="close" size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.simpleModalContent}
-              keyboardShouldPersistTaps="always"
-              showsVerticalScrollIndicator={false}
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Nouveau locataire</Text>
+            <TouchableOpacity
+              onPress={() => setShowAddModal(false)}
+              style={styles.closeButton}
             >
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
               <View style={styles.simpleFormGroup}>
                 <Text style={styles.simpleFormLabel}>Prénom *</Text>
                 <TextInput
                   style={styles.simpleFormInput}
                   value={newTenantData.firstName}
-                  onChangeText={(text) => setNewTenantData(prev => ({ ...prev, firstName: text }))}
+                  onChangeText={handleFirstNameChange}
                   placeholder="Prénom du locataire"
                   autoCapitalize="words"
                   autoCorrect={false}
                   keyboardType="default"
                   returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               </View>
 
@@ -278,12 +307,13 @@ export default function TenantsScreen() {
                 <TextInput
                   style={styles.simpleFormInput}
                   value={newTenantData.lastName}
-                  onChangeText={(text) => setNewTenantData(prev => ({ ...prev, lastName: text }))}
+                  onChangeText={handleLastNameChange}
                   placeholder="Nom du locataire"
                   autoCapitalize="words"
                   autoCorrect={false}
                   keyboardType="default"
                   returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               </View>
 
@@ -292,10 +322,11 @@ export default function TenantsScreen() {
                 <TextInput
                   style={styles.simpleFormInput}
                   value={newTenantData.phone}
-                  onChangeText={(text) => setNewTenantData(prev => ({ ...prev, phone: text }))}
+                  onChangeText={handlePhoneChange}
                   placeholder="Numéro de téléphone"
                   keyboardType="phone-pad"
                   returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               </View>
 
@@ -304,12 +335,13 @@ export default function TenantsScreen() {
                 <TextInput
                   style={styles.simpleFormInput}
                   value={newTenantData.email}
-                  onChangeText={(text) => setNewTenantData(prev => ({ ...prev, email: text }))}
+                  onChangeText={handleEmailChange}
                   placeholder="email@exemple.com"
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               </View>
 
@@ -331,12 +363,13 @@ export default function TenantsScreen() {
                 <TextInput
                   style={styles.simpleFormInput}
                   value={newTenantData.roomName}
-                  onChangeText={(text) => setNewTenantData(prev => ({ ...prev, roomName: text }))}
+                  onChangeText={handleRoomNameChange}
                   placeholder="Ex: Chambre 101, Studio A"
                   autoCapitalize="words"
                   autoCorrect={false}
                   keyboardType="default"
                   returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               </View>
 
@@ -345,12 +378,13 @@ export default function TenantsScreen() {
                 <TextInput
                   style={styles.simpleFormInput}
                   value={newTenantData.roomType}
-                  onChangeText={(text) => setNewTenantData(prev => ({ ...prev, roomType: text }))}
+                  onChangeText={handleRoomTypeChange}
                   placeholder="Ex: Studio, Chambre simple, Suite"
                   autoCapitalize="words"
                   autoCorrect={false}
                   keyboardType="default"
                   returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               </View>
 
@@ -359,10 +393,11 @@ export default function TenantsScreen() {
                 <TextInput
                   style={styles.simpleFormInput}
                   value={newTenantData.rentAmount}
-                  onChangeText={(text) => setNewTenantData(prev => ({ ...prev, rentAmount: text }))}
+                  onChangeText={handleRentAmountChange}
                   placeholder="Montant en FCFA"
                   keyboardType="numeric"
                   returnKeyType="done"
+                  blurOnSubmit={false}
                 />
               </View>
 
@@ -395,10 +430,9 @@ export default function TenantsScreen() {
               </View>
             </ScrollView>
           </View>
-        </View>
       </Modal>
     );
-  };
+  });
 
   // Loading check
   if (loading) {
@@ -826,5 +860,31 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 20,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
   },
 });

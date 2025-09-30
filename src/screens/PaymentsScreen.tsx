@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,8 @@ export default function PaymentsScreen() {
   const [overduePayments, setOverduePayments] = useState<OverduePayment[]>([]);
   const [tenants, setTenants] = useState<TenantWithDetails[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showTenantPicker, setShowTenantPicker] = useState(false);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Form state
@@ -110,7 +112,7 @@ export default function PaymentsScreen() {
     setOverduePayments(overdue);
   };
 
-  const handleAddPayment = async () => {
+  const handleAddPayment = useCallback(async () => {
     if (!newPaymentData.tenantId || !newPaymentData.month || !newPaymentData.amount) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
@@ -137,7 +139,12 @@ export default function PaymentsScreen() {
       console.error('Error adding payment:', error);
       Alert.alert('Erreur', 'Impossible d\'ajouter le paiement');
     }
-  };
+  }, [newPaymentData, loadPayments, loadTenants]);
+
+  // Input change handler - memoized to prevent modal re-renders
+  const handleAmountChange = useCallback((text: string) => {
+    setNewPaymentData(prev => ({ ...prev, amount: text }));
+  }, []);
 
   const PaymentCard = ({ payment }: { payment: PaymentWithDetails }) => (
     <View style={styles.paymentCard}>
@@ -205,14 +212,127 @@ export default function PaymentsScreen() {
     </TouchableOpacity>
   );
 
-  const AddPaymentModal = () => {
-    const handleTenantChange = useCallback((text: string) => {
-      // This would be for a search/filter if needed
-    }, []);
+  const TenantPickerModal = () => (
+    <Modal
+      visible={showTenantPicker}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setShowTenantPicker(false)}
+    >
+      <View style={styles.overlay}>
+        <View style={styles.pickerModalContainer}>
+          <View style={styles.pickerModalHeader}>
+            <Text style={styles.pickerModalTitle}>Choisir un locataire</Text>
+            <TouchableOpacity
+              onPress={() => setShowTenantPicker(false)}
+              style={styles.pickerCloseButton}
+            >
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
 
-    const handleAmountChange = useCallback((text: string) => {
-      setNewPaymentData(prev => ({ ...prev, amount: text }));
-    }, []);
+          <ScrollView style={styles.pickerModalContent}>
+            {tenants.length === 0 ? (
+              <View style={styles.emptyPickerState}>
+                <Ionicons name="people" size={40} color="#d1d5db" />
+                <Text style={styles.emptyPickerTitle}>Aucun locataire</Text>
+                <Text style={styles.emptyPickerText}>
+                  Vous devez d'abord ajouter des locataires
+                </Text>
+              </View>
+            ) : (
+              tenants.map((tenant) => (
+                <TouchableOpacity
+                  key={tenant.id}
+                  style={styles.tenantPickerItem}
+                  onPress={() => {
+                    setNewPaymentData(prev => ({ ...prev, tenantId: tenant.id }));
+                    setShowTenantPicker(false);
+                  }}
+                >
+                  <View style={styles.tenantPickerIcon}>
+                    <Text style={styles.tenantPickerInitial}>
+                      {tenant.first_name[0]}{tenant.last_name[0]}
+                    </Text>
+                  </View>
+                  <View style={styles.tenantPickerInfo}>
+                    <Text style={styles.tenantPickerName}>{tenant.first_name} {tenant.last_name}</Text>
+                    <Text style={styles.tenantPickerDetails}>
+                      {tenant.house?.name} • {tenant.room?.name}
+                    </Text>
+                  </View>
+                  {newPaymentData.tenantId === tenant.id && (
+                    <View style={styles.tenantPickerSelected}>
+                      <Ionicons name="checkmark" size={20} color="#10b981" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const MonthPickerModal = () => {
+    const currentDate = new Date();
+    const months = [];
+
+    // Generate last 12 months
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = date.toLocaleDateString('fr-FR', {
+        month: 'long',
+        year: 'numeric'
+      });
+      months.push({ value: monthValue, label: monthLabel });
+    }
+
+    return (
+      <Modal
+        visible={showMonthPicker}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowMonthPicker(false)}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.pickerModalContainer}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Choisir un mois</Text>
+              <TouchableOpacity
+                onPress={() => setShowMonthPicker(false)}
+                style={styles.pickerCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.pickerModalContent}>
+              {months.map((month) => (
+                <TouchableOpacity
+                  key={month.value}
+                  style={styles.monthPickerItem}
+                  onPress={() => {
+                    setNewPaymentData(prev => ({ ...prev, month: month.value }));
+                    setShowMonthPicker(false);
+                  }}
+                >
+                  <Text style={styles.monthPickerText}>{month.label}</Text>
+                  {newPaymentData.month === month.value && (
+                    <Ionicons name="checkmark" size={20} color="#10b981" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  const AddPaymentModal = memo(() => {
 
     return (
       <Modal
@@ -222,33 +342,27 @@ export default function PaymentsScreen() {
         onRequestClose={() => setShowAddModal(false)}
         statusBarTranslucent={true}
       >
-        <KeyboardAvoidingView
-          style={styles.keyboardAvoidingView}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
-        >
-          <View style={styles.simpleModalContainer}>
-            <View style={styles.simpleModalHeader}>
-              <Text style={styles.simpleModalTitle}>Nouveau paiement</Text>
-              <TouchableOpacity
-                onPress={() => setShowAddModal(false)}
-                style={styles.simpleCloseButton}
-              >
-                <Ionicons name="close" size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.simpleModalContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.scrollContent}
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Nouveau paiement</Text>
+            <TouchableOpacity
+              onPress={() => setShowAddModal(false)}
+              style={styles.closeButton}
             >
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
           <View style={styles.simpleFormGroup}>
             <Text style={styles.simpleFormLabel}>Locataire *</Text>
             <TouchableOpacity
               style={styles.simpleFormSelect}
-              onPress={() => Alert.alert('Info', 'Sélectionnez un locataire')}
+              onPress={() => setShowTenantPicker(true)}
             >
               <Text style={newPaymentData.tenantId ? styles.simpleFormSelectText : styles.simpleFormPlaceholder}>
                 {newPaymentData.tenantId ?
@@ -265,7 +379,7 @@ export default function PaymentsScreen() {
             <Text style={styles.simpleFormLabel}>Mois *</Text>
             <TouchableOpacity
               style={styles.simpleFormSelect}
-              onPress={() => Alert.alert('Info', 'Sélectionnez un mois')}
+              onPress={() => setShowMonthPicker(true)}
             >
               <Text style={newPaymentData.month ? styles.simpleFormSelectText : styles.simpleFormPlaceholder}>
                 {newPaymentData.month ?
@@ -315,10 +429,9 @@ export default function PaymentsScreen() {
               </View>
             </ScrollView>
           </View>
-        </KeyboardAvoidingView>
       </Modal>
     );
-  };
+  });
 
   if (loading) {
     return (
@@ -379,6 +492,8 @@ export default function PaymentsScreen() {
         )}
       </View>
 
+      <TenantPickerModal />
+      <MonthPickerModal />
       <AddPaymentModal />
     </ScrollView>
   );
@@ -683,5 +798,147 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 20,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pickerModalContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  pickerModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  pickerCloseButton: {
+    padding: 8,
+  },
+  pickerModalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  emptyPickerState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyPickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyPickerText: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  tenantPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  tenantPickerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  tenantPickerInitial: {
+    color: '#2563eb',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  tenantPickerInfo: {
+    flex: 1,
+  },
+  tenantPickerName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  tenantPickerDetails: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  tenantPickerSelected: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#d1fae5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthPickerItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  monthPickerText: {
+    fontSize: 16,
+    color: '#111827',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
   },
 });
