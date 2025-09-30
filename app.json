@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "DomusApp",
+    "name": "Domus",
     "slug": "DomusApp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -21,13 +21,19 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.domus.nathan"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "179c3b88-a885-49ea-8670-5f2b883b1bf0"
+      }
+    }
   }
 }
