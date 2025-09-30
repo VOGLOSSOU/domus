@@ -7,15 +7,13 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
-  FlatList,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PaymentDAO } from '../dao/PaymentDAO';
 import { TenantDAO } from '../dao/TenantDAO';
 import { Payment, TenantWithDetails } from '../types';
+import AddPaymentModal from '../components/AddPaymentModal';
 
 interface PaymentWithDetails extends Payment {
   tenant?: TenantWithDetails;
@@ -48,7 +46,7 @@ export default function PaymentsScreen() {
     loadTenants();
   }, []);
 
-  const loadPayments = async () => {
+  const loadPayments = useCallback(async () => {
     try {
       setLoading(true);
       const paymentsData = await PaymentDAO.getAll();
@@ -70,9 +68,9 @@ export default function PaymentsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadTenants = async () => {
+  const loadTenants = useCallback(async () => {
     try {
       const tenantsData = await TenantDAO.getAllWithPaymentStatus();
       setTenants(tenantsData);
@@ -80,9 +78,9 @@ export default function PaymentsScreen() {
     } catch (error) {
       console.error('Error loading tenants:', error);
     }
-  };
+  }, []);
 
-  const calculateOverduePayments = async (tenantsList: TenantWithDetails[]) => {
+  const calculateOverduePayments = useCallback(async (tenantsList: TenantWithDetails[]) => {
     const overdue: OverduePayment[] = [];
     const currentDate = new Date();
     const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
@@ -110,7 +108,7 @@ export default function PaymentsScreen() {
     }
 
     setOverduePayments(overdue);
-  };
+  }, []);
 
   const handleAddPayment = useCallback(async () => {
     if (!newPaymentData.tenantId || !newPaymentData.month || !newPaymentData.amount) {
@@ -146,7 +144,7 @@ export default function PaymentsScreen() {
     setNewPaymentData(prev => ({ ...prev, amount: text }));
   }, []);
 
-  const PaymentCard = ({ payment }: { payment: PaymentWithDetails }) => (
+  const PaymentCard = memo(({ payment }: { payment: PaymentWithDetails }) => (
     <View style={styles.paymentCard}>
       <View style={styles.paymentHeader}>
         <View style={styles.paymentIcon}>
@@ -174,9 +172,9 @@ export default function PaymentsScreen() {
         </View>
       </View>
     </View>
-  );
+  ));
 
-  const OverdueCard = ({ overdue }: { overdue: OverduePayment }) => (
+  const OverdueCard = memo(({ overdue }: { overdue: OverduePayment }) => (
     <TouchableOpacity
       style={styles.overdueCard}
       onPress={() => {
@@ -210,9 +208,9 @@ export default function PaymentsScreen() {
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
-  );
+  ));
 
-  const TenantPickerModal = () => (
+  const TenantPickerModal = memo(() => (
     <Modal
       visible={showTenantPicker}
       animationType="fade"
@@ -273,9 +271,9 @@ export default function PaymentsScreen() {
         </View>
       </View>
     </Modal>
-  );
+  ));
 
-  const MonthPickerModal = () => {
+  const MonthPickerModal = memo(() => {
     const currentDate = new Date();
     const months = [];
 
@@ -330,108 +328,29 @@ export default function PaymentsScreen() {
         </View>
       </Modal>
     );
-  };
-
-  const AddPaymentModal = memo(() => {
-
-    return (
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowAddModal(false)}
-        statusBarTranslucent={true}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Nouveau paiement</Text>
-            <TouchableOpacity
-              onPress={() => setShowAddModal(false)}
-              style={styles.closeButton}
-            >
-              <Ionicons name="close" size={24} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            style={styles.modalContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-          <View style={styles.simpleFormGroup}>
-            <Text style={styles.simpleFormLabel}>Locataire *</Text>
-            <TouchableOpacity
-              style={styles.simpleFormSelect}
-              onPress={() => setShowTenantPicker(true)}
-            >
-              <Text style={newPaymentData.tenantId ? styles.simpleFormSelectText : styles.simpleFormPlaceholder}>
-                {newPaymentData.tenantId ?
-                  tenants.find(t => t.id === newPaymentData.tenantId)?.first_name + ' ' +
-                  tenants.find(t => t.id === newPaymentData.tenantId)?.last_name
-                  : 'Choisir un locataire'
-                }
-              </Text>
-              <Ionicons name="chevron-down" size={20} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.simpleFormGroup}>
-            <Text style={styles.simpleFormLabel}>Mois *</Text>
-            <TouchableOpacity
-              style={styles.simpleFormSelect}
-              onPress={() => setShowMonthPicker(true)}
-            >
-              <Text style={newPaymentData.month ? styles.simpleFormSelectText : styles.simpleFormPlaceholder}>
-                {newPaymentData.month ?
-                  new Date(newPaymentData.month + '-01').toLocaleDateString('fr-FR', {
-                    month: 'long',
-                    year: 'numeric'
-                  })
-                  : 'Choisir un mois'
-                }
-              </Text>
-              <Ionicons name="chevron-down" size={20} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
-
-              <View style={styles.simpleFormGroup}>
-                <Text style={styles.simpleFormLabel}>Montant *</Text>
-                <TextInput
-                  style={styles.simpleFormInput}
-                  value={newPaymentData.amount}
-                  onChangeText={handleAmountChange}
-                  placeholder="Montant en FCFA"
-                  keyboardType="numeric"
-                  returnKeyType="done"
-                />
-              </View>
-
-              <View style={styles.simpleFormActions}>
-                <TouchableOpacity
-                  style={[styles.simpleFormButton, styles.simpleCancelButton]}
-                  onPress={() => {
-                    setNewPaymentData({
-                      tenantId: 0,
-                      month: '',
-                      amount: '',
-                    });
-                    setShowAddModal(false);
-                  }}
-                >
-                  <Text style={styles.simpleCancelButtonText}>Annuler</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.simpleFormButton, styles.simpleSubmitButton]}
-                  onPress={handleAddPayment}
-                >
-                  <Text style={styles.simpleSubmitButtonText}>Enregistrer le paiement</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-      </Modal>
-    );
   });
+
+  // Memoized handlers for modal
+  const handleCancelPayment = useCallback(() => {
+    setNewPaymentData({
+      tenantId: 0,
+      month: '',
+      amount: '',
+    });
+    setShowAddModal(false);
+  }, []);
+
+  const handleClosePaymentModal = useCallback(() => {
+    setShowAddModal(false);
+  }, []);
+
+  const handleShowTenantPicker = useCallback(() => {
+    setShowTenantPicker(true);
+  }, []);
+
+  const handleShowMonthPicker = useCallback(() => {
+    setShowMonthPicker(true);
+  }, []);
 
   if (loading) {
     return (
@@ -494,7 +413,17 @@ export default function PaymentsScreen() {
 
       <TenantPickerModal />
       <MonthPickerModal />
-      <AddPaymentModal />
+      <AddPaymentModal
+        visible={showAddModal}
+        formData={newPaymentData}
+        tenants={tenants}
+        onAmountChange={handleAmountChange}
+        onSubmit={handleAddPayment}
+        onCancel={handleCancelPayment}
+        onClose={handleClosePaymentModal}
+        onShowTenantPicker={handleShowTenantPicker}
+        onShowMonthPicker={handleShowMonthPicker}
+      />
     </ScrollView>
   );
 }
