@@ -11,10 +11,11 @@ import {
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { HouseDAO } from '../dao/HouseDAO';
-import { TenantDAO } from '../dao/TenantDAO';
-import { PaymentDAO } from '../dao/PaymentDAO';
-import { House, Tenant } from '../types';
+import { HouseDAO } from '../db/dao/HouseDAO';
+import { TenantDAO } from '../db/dao/TenantDAO';
+import { PaymentDAO } from '../db/dao/PaymentDAO';
+import { House, Tenant } from '../types/index';
+import { useAppContext } from '../context/AppContext';
 import AddHouseModal from '../components/AddHouseModal';
 
 interface HouseWithTenants extends House {
@@ -24,6 +25,7 @@ interface HouseWithTenants extends House {
 }
 
 export default function HousesScreen() {
+  const { refreshTrigger, triggerRefresh } = useAppContext();
   const [houses, setHouses] = useState<HouseWithTenants[]>([]);
   const [filteredHouses, setFilteredHouses] = useState<HouseWithTenants[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,6 +55,13 @@ export default function HousesScreen() {
   useEffect(() => {
     filterHouses();
   }, [houses, searchQuery]);
+
+  // Refresh data when global refresh is triggered
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      loadHouses();
+    }
+  }, [refreshTrigger]);
 
   const loadHouses = useCallback(async () => {
     try {
@@ -131,12 +140,13 @@ export default function HousesScreen() {
       setFormData({ name: '', address: '' });
       setShowAddModal(false);
       loadHouses();
+      triggerRefresh(); // Refresh all screens
       Alert.alert('Succès', 'Maison ajoutée avec succès');
     } catch (error) {
       console.error('Error adding house:', error);
       Alert.alert('Erreur', 'Impossible d\'ajouter la maison');
     }
-  }, [formData, loadHouses]);
+  }, [formData, loadHouses, triggerRefresh]);
 
   const handleDeleteHouse = useCallback((house: HouseWithTenants) => {
     Alert.alert(
@@ -189,7 +199,7 @@ export default function HousesScreen() {
         {house.overdueCount > 0 && (
           <View style={styles.metric}>
             <Ionicons name="alert-circle" size={16} color="#ef4444" />
-            <Text style={styles.overdueText}>{house.overdueCount} en retard</Text>
+            <Text style={styles.overdueText}>{house.overdueCount} dernier paiement effectué</Text>
           </View>
         )}
       </View>
@@ -256,7 +266,7 @@ export default function HousesScreen() {
               </View>
               <View style={styles.statItem}>
                 <Text style={styles.statNumber}>{selectedHouse.overdueCount}</Text>
-                <Text style={styles.statLabel}>En retard</Text>
+                <Text style={styles.statLabel}>Dernier paiement effectué</Text>
               </View>
             </View>
 

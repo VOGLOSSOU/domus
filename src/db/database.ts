@@ -74,6 +74,7 @@ export const initDatabase = async () => {
         month TEXT NOT NULL,
         amount REAL NOT NULL,
         paid_at TEXT NOT NULL DEFAULT (datetime('now')),
+        notes TEXT,
         FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
       );`
     );

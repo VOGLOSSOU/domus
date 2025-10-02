@@ -1,15 +1,9 @@
+// Base types - defined inline to avoid import issues
 export interface House {
   id: number;
   name: string;
   address: string;
   created_at: string;
-}
-
-export interface Room {
-  id: number;
-  house_id: number;
-  name: string;
-  type: string;
 }
 
 export interface Tenant {
@@ -25,24 +19,42 @@ export interface Tenant {
   rent_amount: number;
 }
 
+export interface Room {
+  id: number;
+  house_id: number;
+  name: string;
+  type: string;
+}
+
 export interface Payment {
   id: number;
   tenant_id: number;
-  month: string; // Format: YYYY-MM
+  month: string; // YYYY-MM
   amount: number;
   paid_at: string;
 }
 
+// Additional types for enhanced data
 export interface TenantWithDetails extends Tenant {
-  house?: House;
-  room?: Room;
-  is_up_to_date?: boolean;
-  overdue_months?: string[];
-  paymentStatus?: 'up_to_date' | 'overdue';
+  house?: {
+    id: number;
+    name: string;
+    address: string;
+  };
+  room?: {
+    id: number;
+    name: string;
+    type: string;
+  };
+  paymentStatus: 'up_to_date' | 'overdue';
+  lastPayment?: Payment;
+  tenant_count?: number; // For compatibility
+  total_rent?: number; // For compatibility
+  overdue_count?: number; // For compatibility
 }
 
-export interface HouseWithStats extends House {
-  tenant_count: number;
-  total_rent: number;
-  overdue_count: number;
+export interface HouseWithTenants extends House {
+  tenants: Tenant[];
+  totalRent: number;
+  overdueCount: number;
 }

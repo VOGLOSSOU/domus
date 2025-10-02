@@ -9,12 +9,13 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TenantWithDetails } from '../types';
+import { TenantWithDetails } from '../types/index';
 
 interface PaymentFormData {
   tenantId: number;
   month: string;
   amount: string;
+  notes: string;
 }
 
 interface AddPaymentModalProps {
@@ -22,6 +23,7 @@ interface AddPaymentModalProps {
   formData: PaymentFormData;
   tenants: TenantWithDetails[];
   onAmountChange: (text: string) => void;
+  onNotesChange: (text: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
   onClose: () => void;
@@ -34,6 +36,7 @@ const AddPaymentModal = memo(({
   formData,
   tenants,
   onAmountChange,
+  onNotesChange,
   onSubmit,
   onCancel,
   onClose,
@@ -108,6 +111,19 @@ const AddPaymentModal = memo(({
               onChangeText={onAmountChange}
               placeholder="Montant en FCFA"
               keyboardType="numeric"
+              returnKeyType="next"
+            />
+          </View>
+
+          <View style={styles.simpleFormGroup}>
+            <Text style={styles.simpleFormLabel}>Remarques (optionnel)</Text>
+            <TextInput
+              style={[styles.simpleFormInput, { height: 80, textAlignVertical: 'top' }]}
+              value={formData.notes}
+              onChangeText={onNotesChange}
+              placeholder="Ajouter une remarque..."
+              multiline
+              numberOfLines={3}
               returnKeyType="done"
             />
           </View>

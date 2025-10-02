@@ -2,20 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { HouseDAO } from '../dao/HouseDAO';
-import { TenantDAO } from '../dao/TenantDAO';
-import { PaymentDAO } from '../dao/PaymentDAO';
-import { HouseWithStats } from '../types';
+import { HouseDAO } from '../db/dao/HouseDAO';
+import { TenantDAO } from '../db/dao/TenantDAO';
+import { PaymentDAO } from '../db/dao/PaymentDAO';
+import { HouseWithTenants } from '../types/index';
+import { useAppContext } from '../context/AppContext';
 
 export default function DashboardScreen() {
   const navigation = useNavigation();
+  const { refreshTrigger, triggerRefresh } = useAppContext();
   const [stats, setStats] = useState({
     houses: 0,
     tenants: 0,
     overduePayments: 0,
     monthlyRevenue: 0,
   });
-  const [houses, setHouses] = useState<HouseWithStats[]>([]);
+  const [houses, setHouses] = useState<HouseWithTenants[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,22 +31,60 @@ export default function DashboardScreen() {
     }, [])
   );
 
+  // Refresh data when global refresh is triggered
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      loadDashboardData();
+    }
+  }, [refreshTrigger]);
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
       console.log('Loading dashboard data...');
 
-      // Load houses with stats
-      const housesData = await HouseDAO.getAllWithStats();
+      // Load houses with tenants
+      const housesData = await HouseDAO.getAll();
       console.log('Houses data loaded:', housesData.length, 'houses');
 
-      setHouses(housesData);
+      // Load tenants for each house and calculate stats
+      const housesWithStats = await Promise.all(
+        housesData.map(async (house) => {
+          const tenants = await TenantDAO.getByHouseId(house.id);
+          const totalRent = tenants.reduce((sum, tenant) => sum + tenant.rent_amount, 0);
+
+          // Calculate overdue payments for current month
+          const currentDate = new Date();
+          const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+          const overdueCount = await Promise.all(
+            tenants.map(async (tenant) => {
+              const entryDate = new Date(tenant.entry_date);
+              const entryMonth = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}`;
+
+              if (entryMonth >= currentMonth) return false;
+
+              const hasPayment = await PaymentDAO.isMonthPaid(tenant.id, currentMonth);
+              return !hasPayment;
+            })
+          ).then(results => results.filter(Boolean).length);
+
+          return {
+            ...house,
+            tenants,
+            totalRent,
+            overdueCount,
+          };
+        })
+      );
+
+      setHouses(housesWithStats);
 
       // Calculate stats
-      const totalHouses = housesData.length;
-      const totalTenants = housesData.reduce((sum, house) => sum + house.tenant_count, 0);
-      const totalRevenue = housesData.reduce((sum, house) => sum + house.total_rent, 0);
-      const totalOverdue = housesData.reduce((sum, house) => sum + house.overdue_count, 0);
+      const totalHouses = housesWithStats.length;
+      const totalTenants = housesWithStats.reduce((sum, house) => sum + house.tenants.length, 0);
+      const totalRevenue = housesWithStats.reduce((sum, house) => sum + house.totalRent, 0);
+      const totalOverdue = housesWithStats.reduce((sum, house) => sum + house.overdueCount, 0);
 
       setStats({
         houses: totalHouses,
@@ -96,22 +136,30 @@ export default function DashboardScreen() {
         <View style={styles.headerContent}>
           <Ionicons name="home" size={28} color="#2563eb" />
           <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>Domus</Text>
+            <Text style={styles.headerTitle}>TSB</Text>
             <Text style={styles.headerSubtitle}>Gestion immobilière</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.profileButton}>
-          <View style={styles.profileAvatar}>
-            <Text style={styles.profileInitial}>A</Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={triggerRefresh}
+          >
+            <Ionicons name="refresh" size={20} color="#6b7280" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.profileButton}>
+            <View style={styles.profileAvatar}>
+              <Text style={styles.profileInitial}>A</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Stats Grid */}
       <View style={styles.statsGrid}>
         <StatCard title="Maisons" value={stats.houses} icon="business" color="#2563eb" />
         <StatCard title="Locataires" value={stats.tenants} icon="people" color="#10b981" />
-        <StatCard title="En retard" value={stats.overduePayments} icon="alert-circle" color="#ef4444" />
+        <StatCard title="Dernier paiement effectué" value={stats.overduePayments} icon="alert-circle" color="#ef4444" />
         <StatCard title="Revenus/mois" value={`${stats.monthlyRevenue.toLocaleString()} F`} icon="cash" color="#8b5cf6" />
       </View>
 
@@ -172,12 +220,12 @@ export default function DashboardScreen() {
                 <View style={styles.houseInfo}>
                   <Text style={styles.houseName} numberOfLines={1}>{house.name}</Text>
                   <Text style={styles.houseStats}>
-                    {house.tenant_count} locataire{house.tenant_count !== 1 ? 's' : ''} • {house.total_rent.toLocaleString()} F
+                    {house.tenants.length} locataire{house.tenants.length !== 1 ? 's' : ''} • {house.totalRent.toLocaleString()} F
                   </Text>
                 </View>
-                {house.overdue_count > 0 && (
+                {house.overdueCount > 0 && (
                   <View style={styles.overdueBadge}>
-                    <Text style={styles.overdueText}>{house.overdue_count}</Text>
+                    <Text style={styles.overdueText}>{house.overdueCount}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -213,6 +261,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
   },
   headerContent: {
     flexDirection: 'row',

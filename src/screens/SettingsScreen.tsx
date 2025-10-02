@@ -9,10 +9,10 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { HouseDAO } from '../dao/HouseDAO';
-import { TenantDAO } from '../dao/TenantDAO';
-import { PaymentDAO } from '../dao/PaymentDAO';
-import { RoomDAO } from '../dao/RoomDAO';
+import { HouseDAO } from '../db/dao/HouseDAO';
+import { TenantDAO } from '../db/dao/TenantDAO';
+import { PaymentDAO } from '../db/dao/PaymentDAO';
+import { RoomDAO } from '../db/dao/RoomDAO';
 
 export default function SettingsScreen() {
   const [showResetModal, setShowResetModal] = useState(false);
@@ -45,6 +45,27 @@ export default function SettingsScreen() {
     } catch (error) {
       console.error('Error resetting data:', error);
       Alert.alert('Erreur', 'Impossible de supprimer les données.');
+    }
+  };
+
+  const handleRefreshData = async () => {
+    try {
+      // Force refresh by re-querying all data
+      await Promise.all([
+        HouseDAO.getAll(),
+        TenantDAO.getAll(),
+        PaymentDAO.getAll(),
+        RoomDAO.getAll()
+      ]);
+
+      Alert.alert(
+        'Succès',
+        'Les données ont été actualisées.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      Alert.alert('Erreur', 'Impossible d\'actualiser les données.');
     }
   };
 
@@ -114,7 +135,7 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>À propos</Text>
         <View style={styles.infoCard}>
-          <Text style={styles.appName}>Domus</Text>
+          <Text style={styles.appName}>TSB</Text>
           <Text style={styles.appVersion}>Version 1.0.0</Text>
           <Text style={styles.appDescription}>
             Application de gestion immobilière pour maisons en location
@@ -125,6 +146,12 @@ export default function SettingsScreen() {
       {/* Data Management */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Gestion des données</Text>
+        <SettingItem
+          icon="refresh"
+          title="Actualiser les données"
+          subtitle="Recharger toutes les données depuis la base"
+          onPress={handleRefreshData}
+        />
         <SettingItem
           icon="trash"
           title="Nettoyer toutes les données"
@@ -176,7 +203,7 @@ export default function SettingsScreen() {
           icon="information-circle"
           title="À propos"
           subtitle="Informations sur l'application"
-          onPress={() => Alert.alert('À propos', 'Domus v1.0.0\nApplication de gestion immobilière')}
+          onPress={() => Alert.alert('À propos', 'TSB v1.0.0\nApplication de gestion immobilière')}
         />
       </View>
 

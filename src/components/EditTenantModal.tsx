@@ -19,10 +19,9 @@ interface TenantFormData {
   roomName: string;
   roomType: string;
   rentAmount: string;
-  paymentFrequency: 'mensuelle';
 }
 
-interface AddTenantModalProps {
+interface EditTenantModalProps {
   visible: boolean;
   formData: TenantFormData;
   houses: House[];
@@ -38,7 +37,7 @@ interface AddTenantModalProps {
   onShowHousePicker: () => void;
 }
 
-const AddTenantModal = memo(({
+const EditTenantModal = memo(({
   visible,
   formData,
   houses,
@@ -52,7 +51,7 @@ const AddTenantModal = memo(({
   onCancel,
   onClose,
   onShowHousePicker,
-}: AddTenantModalProps) => {
+}: EditTenantModalProps) => {
   return (
     <Modal
       visible={visible}
@@ -63,7 +62,7 @@ const AddTenantModal = memo(({
     >
       <View style={styles.modalContainer}>
         <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Nouveau locataire</Text>
+          <Text style={styles.modalTitle}>Modifier le locataire</Text>
           <TouchableOpacity
             onPress={onClose}
             style={styles.closeButton}
@@ -182,7 +181,7 @@ const AddTenantModal = memo(({
               style={[styles.simpleFormButton, styles.simpleSubmitButton]}
               onPress={onSubmit}
             >
-              <Text style={styles.simpleSubmitButtonText}>Ajouter le locataire</Text>
+              <Text style={styles.simpleSubmitButtonText}>Modifier le locataire</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -299,8 +298,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   scrollContent: {
-    paddingBottom: 100, // Espace pour les boutons en bas
+    paddingBottom: 100,
   },
 });
 
-export default AddTenantModal;
+export default EditTenantModal;

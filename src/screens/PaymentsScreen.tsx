@@ -10,9 +10,10 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { PaymentDAO } from '../dao/PaymentDAO';
-import { TenantDAO } from '../dao/TenantDAO';
-import { Payment, TenantWithDetails } from '../types';
+import { PaymentDAO } from '../db/dao/PaymentDAO';
+import { TenantDAO } from '../db/dao/TenantDAO';
+import { Payment, TenantWithDetails } from '../types/index';
+import { useAppContext } from '../context/AppContext';
 import AddPaymentModal from '../components/AddPaymentModal';
 
 interface PaymentWithDetails extends Payment {
@@ -26,12 +27,16 @@ interface OverduePayment {
 }
 
 export default function PaymentsScreen() {
+  const { refreshTrigger, triggerRefresh } = useAppContext();
   const [payments, setPayments] = useState<PaymentWithDetails[]>([]);
   const [overduePayments, setOverduePayments] = useState<OverduePayment[]>([]);
   const [tenants, setTenants] = useState<TenantWithDetails[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTenantPicker, setShowTenantPicker] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [editingPayment, setEditingPayment] = useState<PaymentWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Form state
@@ -39,12 +44,21 @@ export default function PaymentsScreen() {
     tenantId: 0,
     month: '',
     amount: '',
+    notes: '',
   });
 
   useEffect(() => {
     loadPayments();
     loadTenants();
   }, []);
+
+  // Refresh data when global refresh is triggered
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      loadPayments();
+      loadTenants();
+    }
+  }, [refreshTrigger]);
 
   const loadPayments = useCallback(async () => {
     try {
@@ -117,31 +131,50 @@ export default function PaymentsScreen() {
     }
 
     try {
-      await PaymentDAO.create({
-        tenant_id: newPaymentData.tenantId,
-        month: newPaymentData.month,
-        amount: parseFloat(newPaymentData.amount),
-      });
+      if (editingPayment) {
+        // Update existing payment
+        await PaymentDAO.update(editingPayment.id, {
+          tenant_id: newPaymentData.tenantId,
+          month: newPaymentData.month,
+          amount: parseFloat(newPaymentData.amount),
+        });
+        Alert.alert('Succès', 'Paiement modifié avec succès');
+      } else {
+        // Create new payment
+        await PaymentDAO.create({
+          tenant_id: newPaymentData.tenantId,
+          month: newPaymentData.month,
+          amount: parseFloat(newPaymentData.amount),
+          notes: newPaymentData.notes.trim() || undefined,
+        });
+        Alert.alert('Succès', 'Paiement ajouté avec succès');
+      }
 
       // Reset form
       setNewPaymentData({
         tenantId: 0,
         month: '',
         amount: '',
+        notes: '',
       });
       setShowAddModal(false);
+      setEditingPayment(null);
       loadPayments();
       loadTenants();
-      Alert.alert('Succès', 'Paiement ajouté avec succès');
+      triggerRefresh(); // Refresh all screens
     } catch (error) {
-      console.error('Error adding payment:', error);
-      Alert.alert('Erreur', 'Impossible d\'ajouter le paiement');
+      console.error('Error saving payment:', error);
+      Alert.alert('Erreur', `Impossible de ${editingPayment ? 'modifier' : 'ajouter'} le paiement`);
     }
-  }, [newPaymentData, loadPayments, loadTenants]);
+  }, [newPaymentData, editingPayment, loadPayments, loadTenants, triggerRefresh]);
 
   // Input change handler - memoized to prevent modal re-renders
   const handleAmountChange = useCallback((text: string) => {
     setNewPaymentData(prev => ({ ...prev, amount: text }));
+  }, []);
+
+  const handleNotesChange = useCallback((text: string) => {
+    setNewPaymentData(prev => ({ ...prev, notes: text }));
   }, []);
 
   const PaymentCard = memo(({ payment }: { payment: PaymentWithDetails }) => (
@@ -162,13 +195,30 @@ export default function PaymentsScreen() {
             })}
           </Text>
         </View>
-        <View style={styles.paymentDate}>
-          <Text style={styles.paymentDateText}>
-            {new Date(payment.paid_at).toLocaleDateString('fr-FR', {
-              day: '2-digit',
-              month: '2-digit'
-            })}
-          </Text>
+        <View style={styles.paymentActions}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => {
+              setEditingPayment(payment);
+              setNewPaymentData({
+                tenantId: payment.tenant?.id || 0,
+                month: payment.month,
+                amount: payment.amount.toString(),
+                notes: '', // TODO: Add notes field to Payment interface
+              });
+              setShowAddModal(true);
+            }}
+          >
+            <Ionicons name="create" size={16} color="#2563eb" />
+          </TouchableOpacity>
+          <View style={styles.paymentDate}>
+            <Text style={styles.paymentDateText}>
+              {new Date(payment.paid_at).toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit'
+              })}
+            </Text>
+          </View>
         </View>
       </View>
     </View>
@@ -183,6 +233,7 @@ export default function PaymentsScreen() {
           tenantId: overdue.tenant.id,
           month: overdue.month,
           amount: overdue.amount.toString(),
+          notes: '',
         });
         setShowAddModal(true);
       }}
@@ -273,57 +324,101 @@ export default function PaymentsScreen() {
     </Modal>
   ));
 
-  const MonthPickerModal = memo(() => {
-    const currentDate = new Date();
-    const months = [];
-
-    // Generate last 12 months
-    for (let i = 0; i < 12; i++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-      const monthValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const monthLabel = date.toLocaleDateString('fr-FR', {
-        month: 'long',
-        year: 'numeric'
-      });
-      months.push({ value: monthValue, label: monthLabel });
-    }
+  const DatePickerModal = memo(() => {
+    const handleDateSelect = () => {
+      const monthValue = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}`;
+      setNewPaymentData(prev => ({ ...prev, month: monthValue }));
+      setShowDatePicker(false);
+    };
 
     return (
       <Modal
-        visible={showMonthPicker}
+        visible={showDatePicker}
         animationType="fade"
         transparent={true}
-        onRequestClose={() => setShowMonthPicker(false)}
+        onRequestClose={() => setShowDatePicker(false)}
       >
         <View style={styles.overlay}>
-          <View style={styles.pickerModalContainer}>
+          <View style={styles.datePickerModal}>
             <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>Choisir un mois</Text>
+              <Text style={styles.pickerModalTitle}>Choisir une date</Text>
               <TouchableOpacity
-                onPress={() => setShowMonthPicker(false)}
+                onPress={() => setShowDatePicker(false)}
                 style={styles.pickerCloseButton}
               >
                 <Ionicons name="close" size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.pickerModalContent}>
-              {months.map((month) => (
+            <View style={styles.datePickerContent}>
+              <View style={styles.datePickerContainer}>
+                {/* Year selector */}
+                <View style={styles.datePickerSection}>
+                  <Text style={styles.datePickerLabel}>Année</Text>
+                  <ScrollView style={styles.yearPicker} showsVerticalScrollIndicator={false}>
+                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 2 + i).map((year) => (
+                      <TouchableOpacity
+                        key={year}
+                        style={[
+                          styles.yearItem,
+                          selectedDate.getFullYear() === year && styles.yearItemSelected
+                        ]}
+                        onPress={() => setSelectedDate(new Date(year, selectedDate.getMonth(), 1))}
+                      >
+                        <Text style={[
+                          styles.yearText,
+                          selectedDate.getFullYear() === year && styles.yearTextSelected
+                        ]}>
+                          {year}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                {/* Month selector */}
+                <View style={styles.datePickerSection}>
+                  <Text style={styles.datePickerLabel}>Mois</Text>
+                  <ScrollView style={styles.monthPicker} showsVerticalScrollIndicator={false}>
+                    {[
+                      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+                      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+                    ].map((monthName, index) => (
+                      <TouchableOpacity
+                        key={monthName}
+                        style={[
+                          styles.monthItem,
+                          selectedDate.getMonth() === index && styles.monthItemSelected
+                        ]}
+                        onPress={() => setSelectedDate(new Date(selectedDate.getFullYear(), index, 1))}
+                      >
+                        <Text style={[
+                          styles.monthText,
+                          selectedDate.getMonth() === index && styles.monthTextSelected
+                        ]}>
+                          {monthName}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+
+              <View style={styles.datePickerActions}>
                 <TouchableOpacity
-                  key={month.value}
-                  style={styles.monthPickerItem}
-                  onPress={() => {
-                    setNewPaymentData(prev => ({ ...prev, month: month.value }));
-                    setShowMonthPicker(false);
-                  }}
+                  style={[styles.datePickerButton, styles.cancelButton]}
+                  onPress={() => setShowDatePicker(false)}
                 >
-                  <Text style={styles.monthPickerText}>{month.label}</Text>
-                  {newPaymentData.month === month.value && (
-                    <Ionicons name="checkmark" size={20} color="#10b981" />
-                  )}
+                  <Text style={styles.cancelButtonText}>Annuler</Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+                <TouchableOpacity
+                  style={[styles.datePickerButton, styles.confirmButton]}
+                  onPress={handleDateSelect}
+                >
+                  <Text style={styles.confirmButtonText}>Sélectionner</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </View>
       </Modal>
@@ -336,8 +431,10 @@ export default function PaymentsScreen() {
       tenantId: 0,
       month: '',
       amount: '',
+      notes: '',
     });
     setShowAddModal(false);
+    setEditingPayment(null);
   }, []);
 
   const handleClosePaymentModal = useCallback(() => {
@@ -349,7 +446,7 @@ export default function PaymentsScreen() {
   }, []);
 
   const handleShowMonthPicker = useCallback(() => {
-    setShowMonthPicker(true);
+    setShowDatePicker(true);
   }, []);
 
   if (loading) {
@@ -381,14 +478,14 @@ export default function PaymentsScreen() {
         </View>
         <View style={[styles.statCard, styles.overdueStat]}>
           <Text style={[styles.statNumber, styles.overdueNumber]}>{overduePayments.length}</Text>
-          <Text style={[styles.statLabel, styles.overdueLabel]}>En retard</Text>
+          <Text style={[styles.statLabel, styles.overdueLabel]}>Dernier paiement effectué</Text>
         </View>
       </View>
 
       {/* Overdue Payments */}
       {overduePayments.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Paiements en retard</Text>
+          <Text style={styles.sectionTitle}>Dernier paiement effectué</Text>
           {overduePayments.map((overdue, index) => (
             <OverdueCard key={index} overdue={overdue} />
           ))}
@@ -412,12 +509,13 @@ export default function PaymentsScreen() {
       </View>
 
       <TenantPickerModal />
-      <MonthPickerModal />
+      <DatePickerModal />
       <AddPaymentModal
         visible={showAddModal}
         formData={newPaymentData}
         tenants={tenants}
         onAmountChange={handleAmountChange}
+        onNotesChange={handleNotesChange}
         onSubmit={handleAddPayment}
         onCancel={handleCancelPayment}
         onClose={handleClosePaymentModal}
@@ -563,6 +661,13 @@ const styles = StyleSheet.create({
   paymentDateText: {
     fontSize: 12,
     color: '#6b7280',
+  },
+  paymentActions: {
+    alignItems: 'flex-end',
+  },
+  editButton: {
+    padding: 4,
+    marginBottom: 4,
   },
   overdueCard: {
     backgroundColor: '#fef2f2',
@@ -869,5 +974,100 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: 20,
+  },
+  datePickerModal: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  datePickerContent: {
+    padding: 20,
+  },
+  datePickerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  datePickerSection: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  datePickerLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 10,
+  },
+  yearPicker: {
+    height: 150,
+    width: 80,
+  },
+  yearItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginVertical: 2,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  yearItemSelected: {
+    backgroundColor: '#2563eb',
+  },
+  yearText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  yearTextSelected: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  monthPicker: {
+    height: 150,
+    width: 100,
+  },
+  monthItem: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginVertical: 1,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  monthItemSelected: {
+    backgroundColor: '#2563eb',
+  },
+  monthText: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  monthTextSelected: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  datePickerActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  datePickerButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f3f4f6',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  confirmButton: {
+    backgroundColor: '#2563eb',
+  },
+  confirmButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'white',
   },
 });

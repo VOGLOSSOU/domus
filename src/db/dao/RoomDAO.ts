@@ -1,5 +1,5 @@
-import { getDatabase } from '../db/database';
-import { Room } from '../types';
+import { getDatabase } from '../database';
+import { Room } from '../../types';
 
 export class RoomDAO {
   static async getAll(): Promise<Room[]> {
