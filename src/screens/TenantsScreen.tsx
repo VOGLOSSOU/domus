@@ -11,6 +11,7 @@ import {
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { TenantDAO } from '../db/dao/TenantDAO';
 import { HouseDAO } from '../db/dao/HouseDAO';
 import { RoomDAO } from '../db/dao/RoomDAO';
@@ -71,6 +72,14 @@ export default function TenantsScreen() {
       loadHouses();
     }
   }, [refreshTrigger]);
+
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadTenants();
+      loadHouses();
+    }, [])
+  );
 
   const loadTenants = useCallback(async () => {
     try {
@@ -232,7 +241,13 @@ export default function TenantsScreen() {
                 styles.statusText,
                 tenant.paymentStatus === 'up_to_date' ? styles.statusTextUpToDate : styles.statusTextOverdue
               ]} numberOfLines={1}>
-                {tenant.paymentStatus === 'up_to_date' ? 'À jour' : 'En retard'}
+                {tenant.lastPayment
+                  ? new Date(tenant.lastPayment.month + '-01').toLocaleDateString('fr-FR', {
+                      month: 'short',
+                      year: 'numeric'
+                    })
+                  : 'Aucun paiement'
+                }
               </Text>
             </View>
           </View>
@@ -572,6 +587,14 @@ export default function TenantsScreen() {
         onShowHousePicker={handleShowHousePicker}
       />
       <HousePickerModal />
+
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setShowAddModal(true)}
+      >
+        <Ionicons name="add" size={24} color="white" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -879,5 +902,21 @@ const styles = StyleSheet.create({
   },
   deleteActionText: {
     color: '#ef4444',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: '#2563eb',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6,
   },
 });

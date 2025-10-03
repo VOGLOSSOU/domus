@@ -153,6 +153,12 @@ export default function SettingsScreen() {
           onPress={handleRefreshData}
         />
         <SettingItem
+          icon="sync"
+          title="Synchroniser les données"
+          subtitle="Synchroniser les données avec le serveur"
+          onPress={() => Alert.alert('Info', 'Synchronisation avec le serveur à venir')}
+        />
+        <SettingItem
           icon="trash"
           title="Nettoyer toutes les données"
           subtitle="Supprimer définitivement toutes les maisons, locataires et paiements"
